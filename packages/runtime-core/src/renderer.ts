@@ -1759,19 +1759,21 @@ function baseCreateRenderer(
     slotScopeIds: string[] | null,
     optimized: boolean
   ) => {
-    let i = 0
-    const l2 = c2.length
-    let e1 = c1.length - 1 // prev ending index
-    let e2 = l2 - 1 // next ending index
+    let i = 0 // 头部标记位
+    const l2 = c2.length // 保留新字节数组的长度
+    let e1 = c1.length - 1 // 旧节点数组尾部标记位
+    let e2 = l2 - 1 // 新节点数组尾部标记位
 
-    // 1. sync from start
+    // 1. 从头比对
     // (a b) c
     // (a b) d e
     while (i <= e1 && i <= e2) {
+      // 取出当前要比对的节点
       const n1 = c1[i]
       const n2 = (c2[i] = optimized
         ? cloneIfMounted(c2[i] as VNode)
         : normalizeVNode(c2[i]))
+      // 如果是sameVnode则递归执行patch，不然就退出头部比对
       if (isSameVNodeType(n1, n2)) {
         patch(
           n1,
@@ -1787,10 +1789,11 @@ function baseCreateRenderer(
       } else {
         break
       }
+      // 每次比对有相同sameVnode，头部标记位i都会自增
       i++
     }
 
-    // 2. sync from end
+    // 2. 从尾比对
     // a (b c)
     // d e (b c)
     while (i <= e1 && i <= e2) {
@@ -1798,6 +1801,7 @@ function baseCreateRenderer(
       const n2 = (c2[e2] = optimized
         ? cloneIfMounted(c2[e2] as VNode)
         : normalizeVNode(c2[e2]))
+      // 如果是sameVnode则递归执行patch，不然就退出尾部比对
       if (isSameVNodeType(n1, n2)) {
         patch(
           n1,
@@ -1813,11 +1817,12 @@ function baseCreateRenderer(
       } else {
         break
       }
+      // 每次比对有相同sameVnode，两个尾部标记位e1和e2递减
       e1--
       e2--
     }
 
-    // 3. common sequence + mount
+    // 3. 新增节点（头标记位比旧节点尾标记位大）
     // (a b)
     // (a b) c
     // i = 2, e1 = 1, e2 = 2
@@ -1828,6 +1833,7 @@ function baseCreateRenderer(
       if (i <= e2) {
         const nextPos = e2 + 1
         const anchor = nextPos < l2 ? (c2[nextPos] as VNode).el : parentAnchor
+        // 遍历头部节点到新节点的尾部位置，逐个新增（patch方法第一个参数为null）
         while (i <= e2) {
           patch(
             null,
@@ -1847,7 +1853,7 @@ function baseCreateRenderer(
       }
     }
 
-    // 4. common sequence + unmount
+    // 4. 删除节点（头标记位比新节点尾标记位大）
     // (a b) c
     // (a b)
     // i = 2, e1 = 2, e2 = 1
@@ -1855,13 +1861,14 @@ function baseCreateRenderer(
     // (b c)
     // i = 0, e1 = 0, e2 = -1
     else if (i > e2) {
+      // 遍历头部节点到旧节点的尾部位置，逐个删除
       while (i <= e1) {
         unmount(c1[i], parentComponent, parentSuspense, true)
         i++
       }
     }
 
-    // 5. unknown sequence
+    // 5. 未知子序列（i<=e1且i<= e2，头部标记位比到新旧节点的尾部标记位都要小，意味着新旧节点都有一些还没有比对）
     // [i ... e1 + 1]: a b [c d e] f g
     // [i ... e2 + 1]: a b [e d c h] f g
     // i = 2, e1 = 4, e2 = 5
@@ -1869,7 +1876,7 @@ function baseCreateRenderer(
       const s1 = i // prev starting index
       const s2 = i // next starting index
 
-      // 5.1 build key:index map for newChildren
+      // 5.1 创建新节点的 key:index 映射
       const keyToNewIndexMap: Map<string | number | symbol, number> = new Map()
       for (i = s2; i <= e2; i++) {
         const nextChild = (c2[i] = optimized
@@ -1887,22 +1894,19 @@ function baseCreateRenderer(
         }
       }
 
-      // 5.2 loop through old children left to be patched and try to patch
-      // matching nodes & remove nodes that are no longer present
+      // 5.2 从左到右遍历旧节点，更新匹配节点，移除不存在的节点
       let j
       let patched = 0
       const toBePatched = e2 - s2 + 1
+      // 标记是否有需要进行节点的位置移动
       let moved = false
-      // used to track whether any node has moved
+      // 追踪是否有需要进行节点的位置移动的中间变量，作辅助作用
       let maxNewIndexSoFar = 0
-      // works as Map<newIndex, oldIndex>
-      // Note that oldIndex is offset by +1
-      // and oldIndex = 0 is a special value indicating the new node has
-      // no corresponding old node.
-      // used for determining longest stable subsequence
+      // 初始化剩下待更新节点的新旧索引的映射，值如果是0表示新节点在旧节点序列中找不到
       const newIndexToOldIndexMap = new Array(toBePatched)
       for (i = 0; i < toBePatched; i++) newIndexToOldIndexMap[i] = 0
 
+      // 遍历旧子节点（s1就是头标记位，e1是旧节点尾标志位）
       for (i = s1; i <= e1; i++) {
         const prevChild = c1[i]
         if (patched >= toBePatched) {
@@ -1910,11 +1914,13 @@ function baseCreateRenderer(
           unmount(prevChild, parentComponent, parentSuspense, true)
           continue
         }
+
+        // 找到和旧子节点key相同的新节点的索引
         let newIndex
         if (prevChild.key != null) {
           newIndex = keyToNewIndexMap.get(prevChild.key)
         } else {
-          // key-less node, try to locate a key-less node of the same type
+          // 没有键的旧节点尝试去找到一个相同类型的无键新节点
           for (j = s2; j <= e2; j++) {
             if (
               newIndexToOldIndexMap[j - s2] === 0 &&
@@ -1925,15 +1931,22 @@ function baseCreateRenderer(
             }
           }
         }
+
+        // 根据索引处理当次遍历的旧节点
         if (newIndex === undefined) {
+          // 找不到索引，删除该节点
           unmount(prevChild, parentComponent, parentSuspense, true)
         } else {
+          // 记录下匹配的新旧索引到映射中，下一阶段使用
           newIndexToOldIndexMap[newIndex - s2] = i + 1
+          // 每次遍历都会记下当前的新节点索引
+          // 如果此次的索引比上次小，证明需要移动节点并记下moved=true，下一阶段会使用
           if (newIndex >= maxNewIndexSoFar) {
             maxNewIndexSoFar = newIndex
           } else {
             moved = true
           }
+          // 找到索引更新该节点
           patch(
             prevChild,
             c2[newIndex] as VNode,
@@ -1949,18 +1962,21 @@ function baseCreateRenderer(
         }
       }
 
-      // 5.3 move and mount
-      // generate longest stable subsequence only when nodes have moved
+      // 5.3 移动和新增节点
+      // 当需要移动时，生成新旧节点共同的最长自增子序列
       const increasingNewIndexSequence = moved
         ? getSequence(newIndexToOldIndexMap)
         : EMPTY_ARR
       j = increasingNewIndexSequence.length - 1
-      // looping backwards so that we can use last patched node as anchor
+      // 从后往前遍历新节点
+      // 逆序遍历好处方便找到上一次更新的节点作为锚节点（在该节点前插入），如果从左往右的话，下一个节点还没完成更新，会不会出现出错问题呢
       for (i = toBePatched - 1; i >= 0; i--) {
         const nextIndex = s2 + i
         const nextChild = c2[nextIndex] as VNode
         const anchor =
           nextIndex + 1 < l2 ? (c2[nextIndex + 1] as VNode).el : parentAnchor
+
+        // 新节点在上一阶段记录下来新旧索引映射找不到的话（表明新的节点不在旧子序列中），所以新增该节点
         if (newIndexToOldIndexMap[i] === 0) {
           // mount new
           patch(
@@ -1975,9 +1991,9 @@ function baseCreateRenderer(
             optimized
           )
         } else if (moved) {
-          // move if:
-          // There is no stable subsequence (e.g. a reverse)
-          // OR current node is not among the stable sequence
+          // 上面已经找到最长自增子序列了，只需判断当前节点在不在最长自增子序列中，不在就移动；
+          // 当遇到在的情况就会开启跳过，这个跳过的次数会等于最长自增子序列的长度；
+          // 当完整跳过最长自增子序列后，j就会变成-1了，那剩下的节点就就都需要移动了
           if (j < 0 || i !== increasingNewIndexSequence[j]) {
             move(nextChild, container, anchor, MoveType.REORDER)
           } else {
