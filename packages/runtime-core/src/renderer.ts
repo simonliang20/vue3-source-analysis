@@ -2420,38 +2420,49 @@ export function traverseStaticChildren(n1: VNode, n2: VNode, shallow = false) {
 }
 
 // https://en.wikipedia.org/wiki/Longest_increasing_subsequence
+// 获取最长自增子序列的索引数组
 function getSequence(arr: number[]): number[] {
-  const p = arr.slice()
-  const result = [0]
+  const p = arr.slice() // 回溯数组
+  const result = [0] // 子序列
   let i, j, u, v, c
   const len = arr.length
   for (i = 0; i < len; i++) {
-    const arrI = arr[i]
+    const arrI = arr[i] // 档次遍历的值
     if (arrI !== 0) {
+      // 1.贪心算法，只要arrI比当前子序列的最后的值（最大的值）要大，就向子序列的后面添加arrI的索引
       j = result[result.length - 1]
       if (arr[j] < arrI) {
-        p[i] = j
+        p[i] = j // 记录当前增加的索引和前一个索引的映射关系，方便后续回溯
         result.push(i)
         continue
       }
-      u = 0
-      v = result.length - 1
+      // 2.二分查找，为了找到比arrI稍大的值，并替换它
+      u = 0 // 表示区间的起始位置
+      v = result.length - 1 // v表示区间的结束位置
       while (u < v) {
         c = (u + v) >> 1
+        // 把查找位置的值和arrI对比，多次遍历后就能找到在子序列中比arrI稍小的值，
         if (arr[result[c]] < arrI) {
-          u = c + 1
+          u = c + 1 // 而u永远会比c稍大的值，那么u就是比arrI稍大的值
         } else {
           v = c
         }
       }
       if (arrI < arr[result[u]]) {
         if (u > 0) {
-          p[i] = result[u - 1]
+          p[i] = result[u - 1] // 记录当前替换的索引和前一个索引的映射关系，方便后续回溯
         }
         result[u] = i
       }
     }
   }
+  /**
+   * 3. 回溯，从子序列最后的值开始，通过回溯数组p，回溯出所有正确的值
+   * 解释：为什么回溯数组是对？因为回溯数组记录的位置都是递增后的前一项，我们可以试想一下，当前是[3,4]，如果来了个更大的值10，添加到数组后* 面变为[3,4,10]，那这时候再来一个值，不管这个值是多少，它一定比4大或比4小，所以4在子序列中是不会再改变了。
+   * 如果我们在遍历过程中把每一个这样的值记录一下，那么连起来真正的正确答案。
+   * 而回溯只是把这个记录拿回来的过程。
+   * 详细案例分析可以看：https://k19oxoz3xdu.feishu.cn/sheets/shtcnFZNMsTiMbIEGrASYlfSyNg
+   */
   u = result.length
   v = result[u - 1]
   while (u-- > 0) {
