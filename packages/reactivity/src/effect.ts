@@ -80,6 +80,10 @@ export class ReactiveEffect<T = any> {
     public scheduler: EffectScheduler | null = null,
     scope?: EffectScope
   ) {
+    // https://www.typescriptlang.org/docs/handbook/2/classes.html#parameter-properties
+    // 由于fn和scheduler都是public关键字，所以编译后构造函数会包含：
+    // this.fn = fn
+    // this.scheduler = scheduler
     recordEffectScope(this, scope)
   }
 
