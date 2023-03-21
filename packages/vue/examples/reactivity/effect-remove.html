@@ -11,30 +11,38 @@
     http-equiv="X-UA-Compatible"
     content="ie=edge"
   >
-  <title>Vue-effect</title>
+  <title>Vue-响应式-清除依赖例子</title>
 </head>
 
 <body>
-  <script src="../dist/vue.global.js"></script>
+  <script src="../../dist/vue.global.js"></script>
 
   <div id="app">
   </div>
 
   <script>
-    const { createApp, reactive, effect } = Vue
+    const { createApp, reactive, effect, watchEffect } = Vue
 
     createApp({
       setup () {
 
         const state = reactive({
-          a: 1
+          a: 1,
+          show: true
         });
 
         effect(() => {
-          console.log(`a: ${state.a}`)
+          if (state.show) {
+            console.log(`a: ${state.a}`)
+          }
         });
 
         state.a++
+
+        setTimeout(() => {
+          state.show = false
+          state.a++
+        }, 1000)
 
         return {
           state

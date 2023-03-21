@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+  <meta
+    http-equiv="X-UA-Compatible"
+    content="ie=edge"
+  >
+  <title>Vue-响应式-基本例子</title>
+</head>
+
+<body>
+  <script src="../../dist/vue.global.js"></script>
+
+  <div id="app">
+  </div>
+
+  <script>
+    const { createApp, reactive, effect } = Vue
+
+    createApp({
+      setup () {
+
+        const state = reactive({
+          a: 1
+        });
+
+        effect(() => {
+          console.log(`a: ${state.a}`)
+        });
+
+        state.a++
+
+        return {
+          state
+        }
+      }
+    }).mount('#app')
+  </script>
+</body>
+
+</html>

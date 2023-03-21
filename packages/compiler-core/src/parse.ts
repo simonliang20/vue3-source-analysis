@@ -248,8 +248,8 @@ function parseChildren(
         pushNode(nodes, node[i])
       }
     } else {
-      console.log(JSON.stringify(nodes, null, 2), JSON.stringify(node, null, 2))
-      console.log('==================')
+      // console.log(JSON.stringify(nodes, null, 2), JSON.stringify(node, null, 2))
+      // console.log('==================')
       pushNode(nodes, node)
     }
   }

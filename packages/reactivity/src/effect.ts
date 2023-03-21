@@ -88,9 +88,12 @@ export class ReactiveEffect<T = any> {
   }
 
   run() {
+    // 若当前 ReactiveEffect 对象脱离响应式上下文
+    // 那么其对应的副作用函数被执行时不会再追踪依赖
     if (!this.active) {
       return this.fn()
     }
+    // 没看懂
     let parent: ReactiveEffect | undefined = activeEffect
     let lastShouldTrack = shouldTrack
     while (parent) {
@@ -100,6 +103,8 @@ export class ReactiveEffect<T = any> {
       parent = parent.parent
     }
     try {
+      // this.parent作用：解决嵌套effect的activeEffect的切换问题
+      // this.parent记录上一个activeEffect
       this.parent = activeEffect
       activeEffect = this
       shouldTrack = true
@@ -107,18 +112,22 @@ export class ReactiveEffect<T = any> {
       trackOpBit = 1 << ++effectTrackDepth
 
       if (effectTrackDepth <= maxMarkerBits) {
+        // 标记依赖都是已追踪过
         initDepMarkers(this)
       } else {
         cleanupEffect(this)
       }
+      // 执行了fn，并返回结果
       return this.fn()
     } finally {
       if (effectTrackDepth <= maxMarkerBits) {
+        // 删除掉没有到达的依赖
         finalizeDepMarkers(this)
       }
 
       trackOpBit = 1 << --effectTrackDepth
 
+      // 执行完当前的fn，切换回上一个activeEffect
       activeEffect = this.parent
       shouldTrack = lastShouldTrack
       this.parent = undefined
@@ -175,18 +184,23 @@ export function effect<T = any>(
   fn: () => T,
   options?: ReactiveEffectOptions
 ): ReactiveEffectRunner {
+  // 如果 fn 已经是一个 effect 函数了，则指向原始函数
   if ((fn as ReactiveEffectRunner).effect) {
     fn = (fn as ReactiveEffectRunner).effect.fn
   }
 
+  // 1.实例化_effect
   const _effect = new ReactiveEffect(fn)
+  // options初始化
   if (options) {
     extend(_effect, options)
     if (options.scope) recordEffectScope(_effect, options.scope)
   }
+  // 2. 不存在懒加载，则执行_effect.run
   if (!options || !options.lazy) {
     _effect.run()
   }
+  // 3.返回绑定_effect的执行函数
   const runner = _effect.run.bind(_effect) as ReactiveEffectRunner
   runner.effect = _effect
   return runner
@@ -216,10 +230,12 @@ export function resetTracking() {
 
 export function track(target: object, type: TrackOpTypes, key: unknown) {
   if (shouldTrack && activeEffect) {
+    // 1.从target:depsMap映射获取depsMap, 没有则设置空的map
     let depsMap = targetMap.get(target)
     if (!depsMap) {
       targetMap.set(target, (depsMap = new Map()))
     }
+    // 2.从key:dep映射获取依赖dep，没有则设置空的dep
     let dep = depsMap.get(key)
     if (!dep) {
       depsMap.set(key, (dep = createDep()))
@@ -228,7 +244,7 @@ export function track(target: object, type: TrackOpTypes, key: unknown) {
     const eventInfo = __DEV__
       ? { effect: activeEffect, target, type, key }
       : undefined
-
+    // 3.追踪副作用（关联依赖和副作用）
     trackEffects(dep, eventInfo)
   }
 }
@@ -237,8 +253,10 @@ export function trackEffects(
   dep: Dep,
   debuggerEventExtraInfo?: DebuggerEventExtraInfo
 ) {
-  let shouldTrack = false
+  let shouldTrack = false // 是否应该依赖追踪
   if (effectTrackDepth <= maxMarkerBits) {
+    // 如果依赖没有重新追踪，标记为重新追踪，主要finalizeDepMarkers使用
+    // 已追踪的就不需要依赖追踪了
     if (!newTracked(dep)) {
       dep.n |= trackOpBit // set newly tracked
       shouldTrack = !wasTracked(dep)
@@ -248,6 +266,7 @@ export function trackEffects(
     shouldTrack = !dep.has(activeEffect!)
   }
 
+  // 需要追踪依赖的，给依赖增加当前副作用，当前副作用的deps也存储和依赖的关系
   if (shouldTrack) {
     dep.add(activeEffect!)
     activeEffect!.deps.push(dep)
