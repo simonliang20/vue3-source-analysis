@@ -291,12 +291,14 @@ export function trigger(
   oldValue?: unknown,
   oldTarget?: Map<unknown, unknown> | Set<unknown>
 ) {
+  // 1.通过target获取depsMap
   const depsMap = targetMap.get(target)
   if (!depsMap) {
     // never been tracked
     return
   }
 
+  // 2.获得所有需要触发的依赖数组
   let deps: (Dep | undefined)[] = []
   if (type === TriggerOpTypes.CLEAR) {
     // collection being cleared
@@ -310,7 +312,7 @@ export function trigger(
       }
     })
   } else {
-    // schedule runs for SET | ADD | DELETE
+    // 通过key从depsMap中获取依赖
     if (key !== void 0) {
       deps.push(depsMap.get(key))
     }
@@ -348,6 +350,7 @@ export function trigger(
     ? { target, type, key, newValue, oldValue, oldTarget }
     : undefined
 
+  // 3.触发依赖数组的所有副作用
   if (deps.length === 1) {
     if (deps[0]) {
       if (__DEV__) {
@@ -375,8 +378,9 @@ export function triggerEffects(
   dep: Dep | ReactiveEffect[],
   debuggerEventExtraInfo?: DebuggerEventExtraInfo
 ) {
-  // spread into array for stabilization
+  // 利用扩展运算符将dep统一为数组
   const effects = isArray(dep) ? dep : [...dep]
+  // 遍历触发所有的副作用
   for (const effect of effects) {
     if (effect.computed) {
       triggerEffect(effect, debuggerEventExtraInfo)
@@ -400,6 +404,7 @@ function triggerEffect(
     if (effect.scheduler) {
       effect.scheduler()
     } else {
+      // 执行副作用实例的run函数
       effect.run()
     }
   }
